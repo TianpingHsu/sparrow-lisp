@@ -4,17 +4,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdarg.h>
+#include <ctype.h>
 
 typedef struct object* (*primitive_t)(struct object* args);
 typedef struct object* (*syntax_t)(struct object*, struct object* );
 
 struct object {
     enum {
-        NUMBER, SYMBOL, STRING, LIST, PROCEDURE, PRIMITIVE, ENVIRONMENT, SYNTAX
+        BOOLEAN, NUMBER, SYMBOL, STRING, PORT, LIST, PROCEDURE, PRIMITIVE, ENVIRONMENT, SYNTAX
     } type;
     union {
+        bool b;
         int64_t interger;
         char* s;  // STRING or SYMBOL
+        FILE* stream;
         struct {  // LIST
             struct object *car;
             struct object *cdr;
@@ -44,6 +48,15 @@ static struct object* the_global_environment = NULL;
     print(exp); \
     newline(); \
 } while(0)
+#define REQUIRE(exp, TYPE) do { \
+    static const char* types[] = \
+    {"boolean", "number", "symbol", "string", "port", "list", "procedure", "environmen", "syntax"};\
+    if ((!exp && TYPE != LIST) || (exp && exp->type != TYPE)) { \
+        printf("require type: %s, but exp has type: %s\n", types[TYPE], \
+                exp ? types[LIST] : types[exp->type]);\
+        assert(0); \
+    } \
+} while(0)
 void tracepoint() {printf("tracepoint\n");}
 
 /*========================================================
@@ -58,6 +71,18 @@ struct object* mk_obj(int t)
     return o;
 }
 
+struct object* mk_bool(bool b) {
+    struct object* o = mk_obj(BOOLEAN);
+    o->b = b;
+    return o;
+}
+
+struct object* mk_integer(int64_t x) {
+    struct object* o = mk_obj(NUMBER);
+    o->interger = x;
+    return o;
+}
+
 extern char* strdup(const char*);
 struct object* mk_str(const char* s) {
     struct object* o = NULL;
@@ -68,30 +93,18 @@ struct object* mk_str(const char* s) {
     return o;
 }
 
-uint64_t hash(const char* s) {
+static unsigned long hash(const char* str) {
     // check [here](http://www.cse.yorku.ca/~oz/hash.html)
     unsigned long hash = 5381;
     int c;
-    while ((c = *s++)) {
-            hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+    while ((c = *str++)) {
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
     }
     return hash % g_sym_table.size;  // collision is possible
-    /*
-        this one is not good, 
-        it happens that "#f" and "if" has same hash value when HTABLE_SIZE is 8191
-
-        uint64_t h = 0;
-        uint8_t *u = (uint8_t *)s;
-        while (*u) {
-         h = (h * 256 + *u) % HTABLE_SIZE;
-         u++;
-        }
-        return h;
-    */
 }
 
 struct object* mk_sym(const char* s) {
-    uint64_t k = hash(s);
+    unsigned long k = hash(s);
     //printf("%s: %lu\n", s, k);
     struct object* o = g_sym_table.table[k];
     if (!o) {
@@ -109,10 +122,21 @@ struct object* cons(struct object*  x, struct object* y) {
     return o;
 }
 
-struct object* mk_integer(int64_t x) {
-    struct object* o = mk_obj(NUMBER);
-    o->interger = x;
-    return o;
+struct object* list(const unsigned int num, ...) {
+    if (!num) return NULL;
+    struct object **l = malloc(sizeof(struct object*) * num);
+    va_list valist;
+    va_start(valist, num);
+    for (int i = 0; i < num; i++) {
+        l[i] = va_arg(valist, struct object*);
+    }
+    va_end(valist);
+    struct object* ret = NULL;
+    for (int i = num - 1; i >= 0; i--) {
+        ret = cons(l[i], ret);
+    }
+    free(l);
+    return ret;
 }
 
 struct object* mk_procedure(struct object* params, struct object* body, struct object* env) {
@@ -156,6 +180,9 @@ void print(struct object* o) {
         printf("()");
     } else {
         switch (o->type) {
+            case BOOLEAN:
+                printf("%s", o->b ? "#t" : "#f");
+                break;
             case NUMBER:
                 printf("%ld", o->interger);
                 break;
@@ -164,6 +191,9 @@ void print(struct object* o) {
                 break;
             case STRING:
                 printf("\"%s\"", o->s);
+                break;
+            case PORT:
+                printf("<PORT>");
                 break;
             case LIST:
                 {
@@ -278,6 +308,54 @@ struct object* extend_environment(struct object* vars, struct object* vals, stru
     return new_env;
 }
 
+struct object* prim_cons(struct object* l) {
+    // (cons x y)
+    return cons(cadr(l), caddr(l));
+}
+
+struct object* prim_car(struct object* l) {
+    // (car l)
+    REQUIRE(cadr(l), LIST);
+    return car(cadr(l));
+}
+
+struct object* prim_cdr(struct object* l) {
+    // (cdr l)
+    REQUIRE(cadr(l), LIST);
+    return cdr(cadr(l));
+}
+
+struct object* prim_eq(struct object* exp) {
+    // (equal x y)
+    exp = cdr(exp);
+    struct object* x = car(exp);
+    struct object* y = cdr(exp);
+    bool b = false;
+    if (x == NULL || y == NULL) {
+        b = (x == y);
+    } else if (x->type == y->type) {
+        switch (x->type) {
+            case NUMBER:
+                b = (x->interger == y->interger);
+                break;
+            case SYMBOL:
+                b = (!strcmp(x->s, y->s));
+                break;
+            default:
+                b = (x == y);
+                break;
+        }
+    }
+    return mk_bool(b);
+}
+
+struct object* prim_isnull(struct object* exp) {
+    // (null? l)
+    struct object* empty_list = mk_sym("()");
+    struct object* l = cadr(exp);
+    return prim_eq(cons(empty_list, l));
+}
+
 struct object* prim_add(struct object* l) {
     // (+ x ...)
     l = cdr(l);
@@ -295,7 +373,7 @@ struct object* prim_multiply(struct object* l) {
     while ((l = cdr(l))) {
         product *= car(l)->interger;
     }
-    return mk_integer(product );
+    return mk_integer(product);
 }
 
 struct object* prim_subtract(struct object* l) {
@@ -339,8 +417,9 @@ struct object* syntax_if(struct object* exp, struct object* env) {
 }
 
 struct object* syntax_quote(struct object* exp, struct object* env) {
-     // (quote <datum>)
-    return eval(cdr(exp), env);
+    // (quote <datum>)
+    //return eval(cdr(exp), env);
+    return cadr(exp);
 }
 
 struct object* syntax_define(struct object* exp, struct object* env) {
@@ -395,7 +474,7 @@ struct object* eval_list(struct object* exp, struct object* env) {
 
                 // apply
                 struct object* body = func->body;
-                print(body);
+                //print(body);
                 newline();
                 return eval(body, new_env);
             }
@@ -431,10 +510,111 @@ struct object* eval(struct object* exp, struct object* env) {
 /*========================================================
  * parser
  * =======================================================*/
-// TODO
+int peek(FILE* fp) {
+    int c = getc(fp);
+    ungetc(c, fp);
+    return c;
+}
+
+bool is_white_space(int c) { return (c == ' ' || c == '\n' || c == '\r' || c == '\t'); }
+char SYMBOLS[] = "~!@#$%^&*_-+\\:,.<>|{}[]?=/";
+struct object *read_symbol(FILE *in, char start) {
+    char buf[128];
+    buf[0] = start;
+    int i = 1;
+    while (isalnum(peek(in)) || strchr(SYMBOLS, peek(in))) {
+        if (i >= 128)
+            printf("Symbol name too long - maximum length 128 characters");
+        buf[i++] = getc(in);
+    }
+    buf[i] = '\0';
+    return mk_sym(buf);
+}
+
+struct object* reverse(struct object* l, struct object* base) {
+    if (!l) return base;
+    return reverse(cdr(l), cons(car(l), base));
+}
+
+struct object* read_exp(FILE* fp);
+struct object* read_list(FILE *fp) {
+    struct object* l = NULL;
+    while (true) {
+        struct object* o = read_exp(fp);
+        if (o == NULL) break;
+        l = cons(o, l);
+    }
+    return reverse(l, NULL);
+}
 
 
+struct object* read_exp(FILE* fp) {
+    int c = peek(fp);
+    for (;;) {
+        c = getc(fp);
+        if (is_white_space(c)) continue;
 
+        if (c == ';') {  // skip comment
+            while (true) {
+                c = getc(fp);
+                if (c == '\n' || c == EOF) break;
+            }
+            continue;
+        }
+
+        if (c == '"') {  // read string
+            static char buf[256] = {0};
+            int len = 0;
+            while ((c = getc(fp) != EOF)) {
+               c = getc(fp); 
+               if (c == '"') {
+                   buf[len] = '\0';
+                   return mk_str(buf);
+               }
+               if (len == 255) {
+                   printf("string is too long\n");
+                   buf[len++] = '\0';
+                   return mk_str(buf);
+               }
+               buf[len++] = c;
+            }
+            return NULL;
+        }
+
+        if (c == '\'') {
+            struct object* quoted_exp = read_exp(fp);
+            return cons(mk_sym("quote"), cons(quoted_exp, NULL));
+        }
+        
+        if (isdigit(c) || ((c == '-') && isdigit(peek(fp)))) {
+            int sign = (c == '-') ? -1 : 1;
+            int sum = (sign == -1) ? 0 : (c - '0');
+            while (isdigit(peek(fp))) {
+                sum = sum * 10 + (getc(fp) - '0');
+            }
+            return mk_integer(sign * sum);
+        }
+
+        if (c == '(') return read_list(fp);
+        if (c == ')') return NULL;
+
+        if (isalpha(c) || strchr(SYMBOLS, c)) return read_symbol(fp, c);
+
+    }
+    return NULL;
+}
+
+struct object* load(const char* filename) {
+    FILE* fp = fopen(filename, "r");
+    struct object* exp = NULL;
+    while (peek(fp) != EOF) {
+        exp = read_exp(fp);
+        print(exp);
+        newline();
+    }
+    fclose(fp);
+    return exp;
+}
 
 /*========================================================
  * init
@@ -450,14 +630,20 @@ static void sparrow_init() {
     // init the_global_environment
     {
         the_global_environment = mk_env(NULL);
-        struct object* e_true = mk_integer(1);
-        struct object* e_false = mk_integer(0);
+        struct object* e_true = mk_bool(true);
+        struct object* e_false = mk_bool(false);
         define_variable(mk_sym("#t"), e_true, the_global_environment);
         define_variable(mk_sym("true"), e_true, the_global_environment);
         define_variable(mk_sym("#f"), e_false, the_global_environment);
         define_variable(mk_sym("false"), e_false, the_global_environment);
+        define_variable(mk_sym("()"), NULL, the_global_environment);
 
         // primitives
+        define_variable(mk_sym("cons"), mk_prim(prim_cons), the_global_environment);
+        define_variable(mk_sym("car"), mk_prim(prim_car), the_global_environment);
+        define_variable(mk_sym("cdr"), mk_prim(prim_cdr), the_global_environment);
+        define_variable(mk_sym("equal?"), mk_prim(prim_eq), the_global_environment);
+        define_variable(mk_sym("null?"), mk_prim(prim_isnull), the_global_environment);
         define_variable(mk_sym("+"), mk_prim(prim_add), the_global_environment);
         define_variable(mk_sym("*"), mk_prim(prim_multiply), the_global_environment);
         define_variable(mk_sym("-"), mk_prim(prim_subtract), the_global_environment);
@@ -469,8 +655,7 @@ static void sparrow_init() {
         define_variable(mk_sym("if"), mk_syntax(syntax_if), the_global_environment);
         define_variable(mk_sym("define"), mk_syntax(syntax_define), the_global_environment);
         define_variable(mk_sym("lambda"), mk_syntax(syntax_lambda), the_global_environment);
-
-        //print(the_global_environment);
+        //PRINT(the_global_environment);
     }
 
     return ;
@@ -497,10 +682,10 @@ void test_special_forms() {
             cons(mk_sym("define"),
                     cons(mk_sym("x"), 
                         cons(mk_integer(43), NULL)));
-        //print(exp);
-        //newline();
-        //print(eval(exp, the_global_environment));
-        //newline();
+        print(exp);
+        newline();
+        print(eval(exp, the_global_environment));
+        newline();
 
         // (define (square x) (* x x))
         struct object* params = cons(mk_sym("square"), cons(mk_sym("x"), NULL));
@@ -524,13 +709,44 @@ void test_special_forms() {
     }
 
     /* ======= test quote ========*/
+    {
+        printf("\n===========test define==============\n");
+        // (quote (1 2))
+        struct object* exp = cons(mk_sym("quote"), cons(mk_integer(1), cons(mk_integer(2), NULL)));
+        PRINT(exp);
+        PRINT(eval(exp, the_global_environment));
+        printf("\n==================================\n");
+    }
 
 
     /* ======= test if ========*/
-    
+    {
+        printf("\n===========test if==============\n");
+        // (if (quote ()) true false)
+        struct object* predicate = cons(mk_sym("quote"),
+                cons(mk_sym("()"), NULL));
+        struct object* consequent = mk_str("() is true");
+        struct object* alternative = mk_str("() is not true");
+        struct object* exp = list (4, mk_sym("if"), predicate, consequent, alternative);
+        PRINT(exp);
+        PRINT(eval(exp, the_global_environment));
+        printf("\n==================================\n");
+    }
 
     /* ======= test lambda ========*/
-
+    {
+        printf("\n===========test lambda==============\n");
+        // (lambda (x) (* x x))
+        struct object* params = cons(mk_sym("x"), NULL);
+        struct object* body = list(3, mk_sym("*"), mk_sym("x"), mk_sym("x"));
+        struct object* exp = list(3, mk_sym("lambda"), params, body);
+        PRINT(exp);
+        PRINT(eval(exp, the_global_environment));
+        exp = list(2, exp, mk_integer(2));
+        PRINT(exp);
+        PRINT(eval(exp, the_global_environment));
+        printf("\n==================================\n");
+    }
 }
 
 void test_print() {
@@ -557,7 +773,6 @@ void test_print() {
         o = cons(mk_integer(1), mk_str("one"));
         print(o);
         newline();
-
 }
 
 int main() {
@@ -565,6 +780,16 @@ int main() {
 
     //test_print();
     //test_prim();
-    test_special_forms();
+    //test_special_forms();
+
+    //load("test.l");
+    while (true) {
+        printf("sparrow>");
+        //struct object* exp = read_exp(stdin);
+        //print(exp);
+        //newline();
+        print(eval(read_exp(stdin), the_global_environment));
+        newline();
+    }
 }
 
