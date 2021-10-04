@@ -42,6 +42,9 @@ static struct {
     int size;
 } g_sym_table;
 static struct object* the_global_environment = NULL;
+static struct object* g_true = NULL;
+static struct object* g_false = NULL;
+static struct object* g_end_of_list = NULL;
 #define newline() printf("\n")
 #define PRINT(exp) do { \
     newline(); \
@@ -60,7 +63,7 @@ static struct object* the_global_environment = NULL;
 void tracepoint() {printf("tracepoint\n");}
 
 /*========================================================
- * basics
+ * constructors
  * =======================================================*/
 struct object* mk_obj(int t)
 {
@@ -174,6 +177,11 @@ struct object* cadr(struct object* l) {return l->cdr->car;}
 struct object* cdar(struct object* l) {return l->car->cdr;}
 struct object* cddr(struct object* l) {return l->cdr->cdr;}
 struct object* caddr(struct object* l) {return l->cdr->cdr->car;}
+int len(struct object* l) {
+    if (!l) return 0;
+    REQUIRE(l, LIST);
+    return 1 + len(cdr(l));
+}
 
 void print(struct object* o) {
     if (!o) {
@@ -248,10 +256,6 @@ void print(struct object* o) {
     }
 }
 
-/*========================================================
- * builtins
- * =======================================================*/
-
 struct object* lookup_variable(struct object* var, struct object* env) {
     while (env) {
         struct object* frame = env->frame;
@@ -308,6 +312,9 @@ struct object* extend_environment(struct object* vars, struct object* vals, stru
     return new_env;
 }
 
+/*========================================================
+ * builtins: primitives and syntax
+ * =======================================================*/
 struct object* prim_cons(struct object* l) {
     // (cons x y)
     return cons(cadr(l), caddr(l));
@@ -346,7 +353,7 @@ struct object* prim_eq(struct object* exp) {
                 break;
         }
     }
-    return mk_bool(b);
+    return b ? g_true : g_false;
 }
 
 struct object* prim_isnull(struct object* exp) {
@@ -402,17 +409,36 @@ struct object* prim_mod(struct object* l) {
     return mk_integer(quot);
 }
 
+struct object* prim_num_eq(struct object* exp) {
+    // (= x y)
+    struct object* args = cdr(exp);
+    struct object* x = car(args);
+    struct object* y = cadr(args);
+    REQUIRE(x, NUMBER);
+    REQUIRE(y, NUMBER);
+    return mk_bool(x->interger == y->interger);
+}
+
+struct object* prim_num_lt(struct object* exp) {
+    // (< x y)
+    struct object* args = cdr(exp);
+    struct object* x = car(args);
+    struct object* y = cadr(args);
+    return mk_bool(x->interger < y->interger);
+}
+
 
 struct object* eval(struct object* exp, struct object* env);
 struct object* syntax_if(struct object* exp, struct object* env) {
     // (if predicate consequent alternative)
     struct object* predicate = cadr(exp);
-    if (eval(predicate, env)) {
-        struct object* consequent = caddr(exp);
-        return eval(consequent, env);
-    } else {
+    struct object* ret = eval(predicate, env);
+    if (ret && ret->type == BOOLEAN && (ret->b == false)) {
         struct object* alternative = cadr(cddr(exp));
         return eval(alternative, env);
+    } else {
+        struct object* consequent = caddr(exp);
+        return eval(consequent, env);
     }
 }
 
@@ -443,6 +469,81 @@ struct object* syntax_lambda(struct object* exp, struct object* env) {
     return closure;
 }
 
+struct object* syntax_cond(struct object* exp, struct object* env) {
+    /*
+     * (cond (<p1> <e1>)
+     *       (<p2> <e2>)
+     *       ...
+     *       (<pn> <en>))
+     */
+    struct object* clauses = cdr(exp);
+    while (clauses) {
+        struct object* clause = car(clauses);
+        struct object* predicate = car(clause);
+        struct object* test = eval(predicate, env);
+        if (test == g_false) {
+            clauses = cdr(clauses);
+        } else {
+           return eval(cadr(clause), env); 
+        }
+    }
+    return NULL;
+}
+
+struct object* syntax_begin(struct object* exp, struct object* env) {
+    /*
+     * (begin <e1> <e2> ... <en>)
+     */
+    struct object* actions = cdr(exp);
+    struct object* ret = NULL;
+    while (actions) {
+        ret = eval(car(actions), env);
+        actions = cdr(actions);
+    }
+    return ret;
+}
+
+struct object* syntax_let(struct object* let_exp, struct object* env) {
+    /*
+     * (let ((<var1> <exp1>) ... (<varn> <expn>)) <body>)
+     * <=>
+     * ((lambda (<var1> ... <varn>) <body>) <exp1> ... <expn>)
+     */
+    PRINT(let_exp);
+    struct object* pairs = cadr(let_exp);
+    struct object* vars = NULL;
+    struct object* exps = NULL;
+    while (pairs) {
+        struct object* pair = car(pairs);
+        vars = cons(car(pair), vars);
+        exps = cons(cadr(pair), exps);
+        pairs = cdr(pairs);
+    }
+    //struct object* mk_procedure(struct object* params, struct object* body, struct object* env) {
+    struct object* body = cddr(let_exp);
+    struct object* lambda = 
+        cons(mk_sym("lambda"), cons(vars, body));
+    struct object* transformed = cons(lambda, exps);
+    PRINT(transformed);
+    return eval(transformed, env);
+}
+
+struct object* syntax_not_supported(struct object* exp, struct object* env) {
+    printf("SYNTAX NOT SUPPORTED:\n");
+    print(exp);
+    newline();
+    return NULL;
+}
+
+struct object* reverse(struct object* l, struct object* base) {
+    if (!l) return base;
+    return reverse(cdr(l), cons(car(l), base));
+}
+
+
+/*========================================================
+ * evaluator
+ * =======================================================*/
 struct object* eval_list(struct object* exp, struct object* env) {
     struct object* func = eval(car(exp), env);  // eval operator
     switch (func->type) {
@@ -455,6 +556,7 @@ struct object* eval_list(struct object* exp, struct object* env) {
                         l = cons(eval(car(args), env), l);
                         args = cdr(args);
                     }
+                    l = reverse(l, NULL);
                     exp = cons(func, l);
                     return (func->primitive)(exp);
                 }
@@ -475,7 +577,7 @@ struct object* eval_list(struct object* exp, struct object* env) {
                 // apply
                 struct object* body = func->body;
                 //print(body);
-                newline();
+                //newline();
                 return eval(body, new_env);
             }
             break;
@@ -531,27 +633,21 @@ struct object *read_symbol(FILE *in, char start) {
     return mk_sym(buf);
 }
 
-struct object* reverse(struct object* l, struct object* base) {
-    if (!l) return base;
-    return reverse(cdr(l), cons(car(l), base));
-}
-
 struct object* read_exp(FILE* fp);
 struct object* read_list(FILE *fp) {
     struct object* l = NULL;
     while (true) {
         struct object* o = read_exp(fp);
-        if (o == NULL) break;
+        if (o == g_end_of_list) break;
         l = cons(o, l);
     }
     return reverse(l, NULL);
 }
 
-
 struct object* read_exp(FILE* fp) {
-    int c = peek(fp);
+    int c;
     for (;;) {
-        c = getc(fp);
+        if ((c = getc(fp)) == EOF) return NULL;
         if (is_white_space(c)) continue;
 
         if (c == ';') {  // skip comment
@@ -565,8 +661,7 @@ struct object* read_exp(FILE* fp) {
         if (c == '"') {  // read string
             static char buf[256] = {0};
             int len = 0;
-            while ((c = getc(fp) != EOF)) {
-               c = getc(fp); 
+            while ((c = getc(fp)) != EOF) {
                if (c == '"') {
                    buf[len] = '\0';
                    return mk_str(buf);
@@ -595,29 +690,18 @@ struct object* read_exp(FILE* fp) {
             return mk_integer(sign * sum);
         }
 
+        if (c == '(' && peek(fp) == ')') {
+            getc(fp); return NULL;
+        }
         if (c == '(') return read_list(fp);
-        if (c == ')') return NULL;
+        if (c == ')') return g_end_of_list;
 
         if (isalpha(c) || strchr(SYMBOLS, c)) return read_symbol(fp, c);
-
     }
-    return NULL;
-}
-
-struct object* load(const char* filename) {
-    FILE* fp = fopen(filename, "r");
-    struct object* exp = NULL;
-    while (peek(fp) != EOF) {
-        exp = read_exp(fp);
-        print(exp);
-        newline();
-    }
-    fclose(fp);
-    return exp;
 }
 
 /*========================================================
- * init
+ * initialization
  * =======================================================*/
 static void sparrow_init() {
     // init symbol table
@@ -625,17 +709,19 @@ static void sparrow_init() {
         g_sym_table.size = 8191;
         g_sym_table.table = malloc(sizeof(struct object*) * g_sym_table.size);
         memset(g_sym_table.table, 0, sizeof(struct object*) * g_sym_table.size);
+        g_end_of_list = mk_sym("END_OF_LIST");
     }
 
     // init the_global_environment
     {
         the_global_environment = mk_env(NULL);
-        struct object* e_true = mk_bool(true);
-        struct object* e_false = mk_bool(false);
-        define_variable(mk_sym("#t"), e_true, the_global_environment);
-        define_variable(mk_sym("true"), e_true, the_global_environment);
-        define_variable(mk_sym("#f"), e_false, the_global_environment);
-        define_variable(mk_sym("false"), e_false, the_global_environment);
+        g_true = mk_bool(true);
+        g_false = mk_bool(false);
+        define_variable(mk_sym("#t"), g_true, the_global_environment);
+        define_variable(mk_sym("true"), g_true, the_global_environment);
+        define_variable(mk_sym("else"), g_true, the_global_environment);
+        define_variable(mk_sym("#f"), g_false, the_global_environment);
+        define_variable(mk_sym("false"), g_false, the_global_environment);
         define_variable(mk_sym("()"), NULL, the_global_environment);
 
         // primitives
@@ -649,147 +735,44 @@ static void sparrow_init() {
         define_variable(mk_sym("-"), mk_prim(prim_subtract), the_global_environment);
         define_variable(mk_sym("/"), mk_prim(prim_divide), the_global_environment);
         define_variable(mk_sym("mod"), mk_prim(prim_mod), the_global_environment);
+        define_variable(mk_sym("="), mk_prim(prim_num_eq), the_global_environment);
+        define_variable(mk_sym("<"), mk_prim(prim_num_lt), the_global_environment);
 
         // special forms
         define_variable(mk_sym("quote"), mk_syntax(syntax_quote), the_global_environment);
         define_variable(mk_sym("if"), mk_syntax(syntax_if), the_global_environment);
         define_variable(mk_sym("define"), mk_syntax(syntax_define), the_global_environment);
         define_variable(mk_sym("lambda"), mk_syntax(syntax_lambda), the_global_environment);
-        //PRINT(the_global_environment);
+        define_variable(mk_sym("cond"), mk_syntax(syntax_cond), the_global_environment);
+        define_variable(mk_sym("begin"), mk_syntax(syntax_begin), the_global_environment);
+        define_variable(mk_sym("let"), mk_syntax(syntax_let), the_global_environment);
+        PRINT(the_global_environment);
     }
 
     return ;
 }
 
-void test_prim() {
-    // (+ 1 2 3)
-    struct object* exp = 
-        cons(mk_sym("+"),
-                cons(mk_integer(1),
-                    cons(mk_integer(2), NULL)));
-    print(exp);
-    newline();
-    print(eval(exp, the_global_environment));
-    newline();
-}
-
-void test_special_forms() {
-    /* ======= test define ========*/
-    {
-        printf("\n===========test define==============\n");
-        // (define x 2)
-        struct object* exp = 
-            cons(mk_sym("define"),
-                    cons(mk_sym("x"), 
-                        cons(mk_integer(43), NULL)));
-        print(exp);
-        newline();
-        print(eval(exp, the_global_environment));
-        newline();
-
-        // (define (square x) (* x x))
-        struct object* params = cons(mk_sym("square"), cons(mk_sym("x"), NULL));
-        struct object* body = cons(mk_sym("*"), cons(mk_sym("x"), cons(mk_sym("x"), NULL)));
-        exp = cons(mk_sym("define"),
-            cons(params, cons(body, NULL)));
-        //print(exp);
-        //newline();
-        print(eval(exp, the_global_environment));
-        newline();
-
-        //newline();
-        //print(the_global_environment);
-
-        exp = cons(mk_sym("square"), cons(mk_integer(8), NULL));
-        print(exp);
-        newline();
-        print(eval(exp, the_global_environment));
-        printf("\n==================================\n");
-
+struct object* load(struct object* module) {
+    REQUIRE(module, STRING);
+    const char* filename = module->s;
+    FILE* fp = fopen(filename, "r");
+    struct object* val = NULL;
+    while (peek(fp) != EOF) {
+        struct object* exp = read_exp(fp);
+        val = eval(exp, the_global_environment);
+        PRINT(val);
     }
-
-    /* ======= test quote ========*/
-    {
-        printf("\n===========test define==============\n");
-        // (quote (1 2))
-        struct object* exp = cons(mk_sym("quote"), cons(mk_integer(1), cons(mk_integer(2), NULL)));
-        PRINT(exp);
-        PRINT(eval(exp, the_global_environment));
-        printf("\n==================================\n");
-    }
-
-
-    /* ======= test if ========*/
-    {
-        printf("\n===========test if==============\n");
-        // (if (quote ()) true false)
-        struct object* predicate = cons(mk_sym("quote"),
-                cons(mk_sym("()"), NULL));
-        struct object* consequent = mk_str("() is true");
-        struct object* alternative = mk_str("() is not true");
-        struct object* exp = list (4, mk_sym("if"), predicate, consequent, alternative);
-        PRINT(exp);
-        PRINT(eval(exp, the_global_environment));
-        printf("\n==================================\n");
-    }
-
-    /* ======= test lambda ========*/
-    {
-        printf("\n===========test lambda==============\n");
-        // (lambda (x) (* x x))
-        struct object* params = cons(mk_sym("x"), NULL);
-        struct object* body = list(3, mk_sym("*"), mk_sym("x"), mk_sym("x"));
-        struct object* exp = list(3, mk_sym("lambda"), params, body);
-        PRINT(exp);
-        PRINT(eval(exp, the_global_environment));
-        exp = list(2, exp, mk_integer(2));
-        PRINT(exp);
-        PRINT(eval(exp, the_global_environment));
-        printf("\n==================================\n");
-    }
-}
-
-void test_print() {
-        struct object* o = NULL;
-        o = mk_integer(100);
-        print(o);
-        newline();
-
-        o = mk_str("hello world");
-        print(o);
-        newline();
-
-        o = cons(mk_integer(100), NULL);
-        print(o);
-        newline();
-
-        o = cons(mk_integer(1), 
-                cons(mk_str("first"), NULL));
-        struct object* b = cons(mk_integer(2),
-                cons(mk_str("second"), NULL));
-        print(cons(o, b));
-        newline();
-
-        o = cons(mk_integer(1), mk_str("one"));
-        print(o);
-        newline();
+    fclose(fp);
+    return val;
 }
 
 int main() {
     sparrow_init();
 
-    //test_print();
-    //test_prim();
-    //test_special_forms();
-
-    //load("test.l");
     while (true) {
         printf("sparrow>");
-        //struct object* exp = read_exp(stdin);
-        //print(exp);
-        //newline();
-        print(eval(read_exp(stdin), the_global_environment));
-        newline();
+        PRINT(eval(read_exp(stdin), the_global_environment));
+        if (peek(stdin) == EOF) break;
     }
 }
 
