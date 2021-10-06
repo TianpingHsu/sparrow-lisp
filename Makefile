@@ -1,15 +1,16 @@
 
 CC = gcc
-CFLAGS = -g -Wall -D DEBUG
-OBJS = sparrow.o
+CFLAGS = -g -Wall
+SRC = sparrow.c
 
-sparrow: $(OBJS)
-	gcc -g -Wall $^ -o $@
+sparrow: $(SRC)
+	gcc $(CFLAGS) $^ -o $@
 
 
-%.o: %.c
-	$(CC) -c -o $@ $< $(CFLAGS)
+test: $(SRC)
+	gcc $(CFLAGS) -D DEBUG  $^ -o $@
+	./test
 
 clean:
-	rm -rf sparrow $(OBJS)
+	rm -rf sparrow test $(OBJS)
 

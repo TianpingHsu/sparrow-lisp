@@ -227,10 +227,10 @@ void print(struct object* o) {
                 }
                 break;
             case PRIMITIVE:
-                printf("<BUILTIN-PRIMITIVE:%p>", o->primitive);
+                printf("<BUILTIN-PRIMITIVE>");
                 break;
             case PROCEDURE:
-                printf("<COMPOUND-PROCEDURE> #parent:%p", o->parent);
+                printf("<COMPOUND-PROCEDURE>");
                 break;
             case ENVIRONMENT:
                 while (o) {
@@ -246,11 +246,15 @@ void print(struct object* o) {
                         vals = cdr(vals);
                     }
                     o = o->parent;
-                    printf("----parent------>\n");
+                    if (o) {
+                        printf("----parent------>\n");
+                    } else {
+                        printf("----end of environment------\n");
+                    }
                 }
                 break;
             case SYNTAX:
-                printf("SPECIAL-FORMS");
+                printf("SPECIAL-FORM");
                 break;
             default:
                 printf("DEFAULT");
@@ -725,9 +729,8 @@ struct object* read_exp(FILE* fp) {
             struct object* quoted_exp = read_exp(fp);
             return cons(mk_sym("quote"), cons(quoted_exp, NULL));
         }
-        
-        // read number
-        if (isdigit(c) || ((c == '-') && isdigit(peek(fp)))) {
+
+        if (isdigit(c) || ((c == '-') && isdigit(peek(fp)))) {  // read number
             int sign = (c == '-') ? -1 : 1;
             int sum = (sign == -1) ? 0 : (c - '0');
             while (isdigit(peek(fp))) {
@@ -755,8 +758,7 @@ struct object* read_exp(FILE* fp) {
             if (peek(fp) == 'f') {getc(fp);return g_false;}
         }
 
-        // read symbol
-        if (isalpha(c) || strchr(SYMBOLS, c)) {
+        if (isalpha(c) || strchr(SYMBOLS, c)) {  // read symbol
             char buf[128];
             buf[0] = c;
             int i = 1;
@@ -787,7 +789,6 @@ static void sparrow_init() {
         the_global_environment = mk_env(NULL);
         g_true = mk_bool(true);
         g_false = mk_bool(false);
-        g_dummy = (struct object*)(-1);
         define_variable(mk_sym("#t"), g_true, the_global_environment);
         define_variable(mk_sym("#f"), g_false, the_global_environment);
         define_variable(mk_sym("()"), NULL, the_global_environment);
@@ -820,7 +821,11 @@ static void sparrow_init() {
         define_variable(mk_sym("set!"), mk_syntax(syntax_set), the_global_environment);
         define_variable(mk_sym("set-car!"), mk_syntax(syntax_set_car), the_global_environment);
         define_variable(mk_sym("set-cdr!"), mk_syntax(syntax_set_cdr), the_global_environment);
-        //PRINT(the_global_environment);
+
+#ifdef DEBUG
+        printf("the global environment ==>\n");
+        PRINT(the_global_environment);
+#endif
     }
 
     return ;
@@ -834,7 +839,7 @@ struct object* load(struct object* module) {
     struct object* val = NULL;
     while (true) {
         struct object* exp = read_exp(fp);
-        if (exp == (struct object*)(-1)) break;
+        if (exp == g_dummy) break;
         val = eval(exp, the_global_environment);
 #ifdef DEBUG
         printf("************************\n");
@@ -842,7 +847,6 @@ struct object* load(struct object* module) {
         printf("\n==> ");
         print(val);
         printf("\n************************\n\n");
-        //PRINT(the_global_environment);
 #endif
     }
     fclose(fp);
@@ -853,19 +857,17 @@ int main() {
     sparrow_init();
 
     load(mk_str("./res/lib.scm"));
+#ifdef DEBUG
     struct object* module = mk_str("./res/test.scm");
     load(module);
     return 0;
+#endif
 
     while (true) {
         printf("sparrow>");
-#ifdef DEBUG
-        struct object* exp = read_exp(stdin);
-        PRINT(exp);
-        PRINT(eval(exp, the_global_environment));
-#else
-        PRINT(eval(read_exp(stdin), the_global_environment));
-#endif
+        print(eval(read_exp(stdin), the_global_environment));
+        newline();
+        newline();
         if (peek(stdin) == EOF) break;
     }
 }
