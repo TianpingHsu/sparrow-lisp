@@ -1,6 +1,6 @@
 
 CC = gcc
-CFLAGS = -g -Wall
+CFLAGS = -g -Wall -D DEBUG
 OBJS = sparrow.o
 
 sparrow: $(OBJS)
