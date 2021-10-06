@@ -9,7 +9,7 @@ recently, I reread the book [_Structure and Interpretation of Computer Programs_
 
 # quick start
 to get read-eval-print-loop:  
->$make  
+>$make sparrow   
 >$./sparrow  
 
 to run the test code:  
