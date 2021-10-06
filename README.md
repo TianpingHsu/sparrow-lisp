@@ -1,5 +1,5 @@
 # sparrow-lisp
-*sparrow* a scheme-like lisp interpreter implemented in C.  
+*sparrow* is a scheme-like lisp interpreter implemented in C.  
 the name *sparrow* comes from the idiom:  
 > the __*sparrow*__ may be small but all its vital organs are there.  
 
@@ -9,12 +9,13 @@ recently, I reread the book [_Structure and Interpretation of Computer Programs_
 
 # quick start
 to get read-eval-print-loop:  
-    $make
-    $./sparrow
+>$make  
+>$./sparrow  
 
 to run the test code:  
-    $make test
-and you get something like this:  
+>$make test  
+
+and you'll get something like this:  
 ```
     ************************
     (assert (sum 1 2 3 4) 10)
@@ -59,10 +60,17 @@ and you get something like this:
 
 
 # supported forms
-```lisp
+```scheme
 ;; define
 (define <name> <val>)
 (define (<name> <formal-paramerters>) <body>)
+
+;; lambda
+(lambda (<formal-parameters>) <body>) ;; (lambda (x) (* x x))
+
+;; variadic arguments
+(define (<name> . <arglist>) <body>)  ;; (define (sum . l ) (apply + l))
+(lambda <arglist> <body>)  ;; (lambda args (apply func (cons x args)))
 
 ;; if
 (if <predicate> <consequent> <alternative>)
@@ -72,9 +80,6 @@ and you get something like this:
       (<p2> <e2>)
       ...
       (<pn> <en>))
-
-;; lambda
-(lambda (<formal-parameters>) <body>)
 
 
 ;; let

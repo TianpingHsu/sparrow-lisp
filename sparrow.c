@@ -327,6 +327,19 @@ struct object* extend_environment(struct object* vars, struct object* vals, stru
 /*========================================================
  * builtins: primitives and syntax
  * =======================================================*/
+
+// helper
+struct object* reverse(struct object* l, struct object* base) {
+    if (!l) return base;
+    return reverse(cdr(l), cons(car(l), base));
+}
+
+// helper
+struct object* append(struct object* x, struct object* y) {
+    if (!x) return y;  // both x and y are LIST
+    return cons(car(x), append(cdr(x), y));
+}
+
 struct object* prim_cons(struct object* l) {
     // (cons x y)
     return cons(cadr(l), caddr(l));
@@ -450,6 +463,33 @@ struct object* prim_display(struct object* exp) {
     printf("\n");
     return NULL;
 }
+
+struct object* prim_eval(struct object* exp) {
+    // (eval exp)
+    return eval(cadr(exp), the_global_environment);
+}
+
+struct object* syntax_apply(struct object* exp, struct object* env) {
+    // (apply func x y ... l)  ;; l must be LIST
+    //PRINT(exp);
+    struct object* func = cadr(exp);
+    struct object* args = cddr(exp);
+    struct object* l = NULL;
+    do {
+        struct object* arg = eval(car(args), env);
+        if (arg->type == LIST && cdr(args) == NULL) {
+            // last arg must be LIST
+            args = arg;
+            break;
+        }
+        l = cons(eval(arg, env), l);
+        args = cdr(args);
+    } while (true);
+    l = reverse(l, NULL);
+    args = append(l, args);
+    return eval(cons(func, args), env);
+}
+
 struct object* load(struct object* module);
 
 
@@ -488,6 +528,9 @@ struct object* syntax_lambda(struct object* exp, struct object* env) {
     // (lambda (<params>) <body>)
     struct object* params = cadr(exp);
     struct object* body = caddr(exp);
+    if (params->type != LIST && params->type == SYMBOL) {
+        params = cons(mk_sym("."), cons(params, NULL));
+    }
     struct object* closure = mk_procedure(params, body, env);
     return closure;
 }
@@ -527,11 +570,6 @@ struct object* syntax_begin(struct object* exp, struct object* env) {
         actions = cdr(actions);
     }
     return ret;
-}
-
-struct object* reverse(struct object* l, struct object* base) {
-    if (!l) return base;
-    return reverse(cdr(l), cons(car(l), base));
 }
 
 struct object* syntax_let(struct object* let_exp, struct object* env) {
@@ -809,6 +847,7 @@ static void sparrow_init() {
         define_variable(mk_sym("<"), mk_prim(prim_num_lt), the_global_environment);
         define_variable(mk_sym("load"), mk_prim(load), the_global_environment);
         define_variable(mk_sym("display"), mk_prim(prim_display), the_global_environment);
+        define_variable(mk_sym("eval"), mk_prim(prim_eval), the_global_environment);
 
         // special forms
         define_variable(mk_sym("quote"), mk_syntax(syntax_quote), the_global_environment);
@@ -821,6 +860,7 @@ static void sparrow_init() {
         define_variable(mk_sym("set!"), mk_syntax(syntax_set), the_global_environment);
         define_variable(mk_sym("set-car!"), mk_syntax(syntax_set_car), the_global_environment);
         define_variable(mk_sym("set-cdr!"), mk_syntax(syntax_set_cdr), the_global_environment);
+        define_variable(mk_sym("apply"), mk_syntax(syntax_apply), the_global_environment);
 
 #ifdef DEBUG
         printf("the global environment ==>\n");

@@ -44,11 +44,11 @@
 (define (reduce func list)
   (foldl func (car list) (cdr list)))
 
-;(define (curry func x)
-  ;(lambda args (apply func (cons x args))))
+(define (curry func x)
+  (lambda args (apply func (cons x args))))
 
-;(define (compose f g)
-  ;(lambda args (f (apply g args))))
+(define (compose f g)
+  (lambda args (f (apply g args))))
 
 (define (length list)
   (foldl (lambda (x) (+ x 1)) 0 list))
@@ -68,7 +68,6 @@
     y
     (cons (car x) (append (cdr x) y))))
 
-; (7 6 9 1 0 19 21)
 (define (sort l)
   (if (null? l)
     l
@@ -94,4 +93,3 @@
 (define (odd? x) 
   (if (= (mod x 2) 1) #t #f))
 (define (even? x) (not (odd? x)))
-

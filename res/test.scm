@@ -1,9 +1,12 @@
 (define (assert exp ans)
   (if (equal? exp ans) "pass" "FAIL"))
 
-;(define (add x y) (+ x y))
-;(define increase (curry 1))
-;(assert (increase 10) 11)
+(define increase (curry + 1))
+(assert (increase 10) 11)
+
+(define (my-sum-v1 . l) (apply + l))
+(define my-sum-v2
+  (lambda l (apply + l)))
 
 ;; test closure (code comes from sicp)
 (define balance 100)
@@ -24,6 +27,8 @@
 (assert (square 8) 64)
 (assert (list 1 2 3) '(1 2 3))
 (assert (sum 1 2 3 4) 10)
+(assert (my-sum-v1 1 2 3 4) 10)
+(assert (my-sum-v2 1 2 3 4) 10)
 (assert (odd? 2) #f)
 (assert (even? 2) #t)
 (assert (min 1 3 4  0 89) 0)
