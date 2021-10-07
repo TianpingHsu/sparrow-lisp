@@ -51,12 +51,12 @@ static struct object* g_dummy = (struct object*)(-1);  // dummy obj
     print(exp); \
     newline(); \
 } while(0)
+static const char* types_str[] = \
+{"boolean", "number", "symbol", "string", "port", "list", "procedure", "primitive","environmen", "syntax"};
 #define REQUIRE(exp, TYPE) do { \
-    static const char* types[] = \
-    {"boolean", "number", "symbol", "string", "port", "list", "procedure", "primitive","environmen", "syntax"};\
     if ((!exp && TYPE != LIST) || (exp && exp->type != TYPE)) { \
-        printf("require type: %s, but exp has type: %s\n", types[TYPE], \
-                exp ? types[exp->type] :  types[LIST]);\
+        printf("require type: %s, but exp has type: %s\n", types_str[TYPE], \
+                exp ? types_str[exp->type] :  types_str[LIST]);\
         assert(0); \
     } \
 } while(0)
@@ -379,6 +379,17 @@ struct object* prim_eq(struct object* exp) {
     struct object* y = cadr(exp);
     return is_equal(x, y) ? g_true : g_false;
 }
+struct object* prim_is_pair(struct object* exp) {
+    // (pair? exp)
+    struct object* o = cadr(exp);
+    return o && o->type == LIST && cdr(o) != NULL ? g_true : g_false;
+}
+
+struct object* prim_is_symbol(struct object* exp) {
+    // (symbol? exp)
+    struct object* o = cadr(exp);
+    return o && o->type == SYMBOL ? g_true : g_false;
+}
 
 struct object* prim_isnull(struct object* exp) {
     // (null? l)
@@ -528,7 +539,7 @@ struct object* syntax_lambda(struct object* exp, struct object* env) {
     // (lambda (<params>) <body>)
     struct object* params = cadr(exp);
     struct object* body = caddr(exp);
-    if (params->type != LIST && params->type == SYMBOL) {
+    if (params->type != LIST && params->type == SYMBOL) {  // variadic
         params = cons(mk_sym("."), cons(params, NULL));
     }
     struct object* closure = mk_procedure(params, body, env);
@@ -660,7 +671,7 @@ struct object* eval_list(struct object* exp, struct object* env) {
                     //newline();
                     return (func->primitive)(exp);
                 }
-        default:
+        case PROCEDURE:
             {
                 // (func <args>)
                 // eval operands
@@ -689,6 +700,11 @@ struct object* eval_list(struct object* exp, struct object* env) {
                 //PRINT(new_env);
                 return eval(body, new_env);
             }
+            break;
+        default:
+            print(car(exp));
+            printf(" has type: %s, which is not appliable!\n", types_str[func->type]);
+            abort();
             break;
     }
     return NULL;
@@ -836,6 +852,8 @@ static void sparrow_init() {
         define_variable(mk_sym("car"), mk_prim(prim_car), the_global_environment);
         define_variable(mk_sym("cdr"), mk_prim(prim_cdr), the_global_environment);
         define_variable(mk_sym("equal?"), mk_prim(prim_eq), the_global_environment);
+        define_variable(mk_sym("pair?"), mk_prim(prim_is_pair), the_global_environment);
+        define_variable(mk_sym("symbol?"), mk_prim(prim_is_symbol), the_global_environment);
         define_variable(mk_sym("null?"), mk_prim(prim_isnull), the_global_environment);
         define_variable(mk_sym("not"), mk_prim(prim_not), the_global_environment);
         define_variable(mk_sym("+"), mk_prim(prim_add), the_global_environment);

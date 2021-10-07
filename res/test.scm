@@ -1,6 +1,18 @@
 (define (assert exp ans)
   (if (equal? exp ans) "pass" "FAIL"))
 
+(define (fact n) 
+  (if (= n 0) 
+    1 
+    (* n (fact (- n 1)))))
+
+(define (fib n)
+  (if (< n 2)
+    1
+    (+ (fib (- n 1))
+       (fib (- n 2)))))
+
+
 (define increase (curry + 1))
 (assert (increase 10) 11)
 
@@ -36,3 +48,5 @@
 (assert (filter odd? (list 1 2 3 4 5 6)) '(1 3 5))
 (assert (map square (list 1 2 3 4 5)) '(1 4 9 16 25))
 (assert (sort (list 7 6 9 1 0 19 21)) '(0 1 6 7 9 19 21))
+(assert (fact 5) 120)
+(assert (fib 8) 34)
