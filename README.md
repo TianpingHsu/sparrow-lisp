@@ -105,7 +105,7 @@ and you'll get something like this:
 2. continuation  
 3. anything else  
 
-p.s. gc is not implemented, you can do it yourself, mark-and-sweep is easy.  
+p.s. gc is not implemented on purpose, you can do it yourself, mark-and-sweep is easy.  
 
 
 # useful materials

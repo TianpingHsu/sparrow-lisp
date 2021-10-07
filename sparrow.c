@@ -428,7 +428,7 @@ struct object* prim_subtract(struct object* l) {
 }
 
 struct object* prim_divide(struct object* l) {
-    // (- x y)
+    // (/ x y)
     l = cdr(l);
     int64_t quot = car(l)->integer;
     quot /= cadr(l)->integer;
@@ -666,9 +666,6 @@ struct object* eval_list(struct object* exp, struct object* env) {
                 {
                     struct object* args = eval_args(cdr(exp), env);
                     exp = cons(func, args);
-                    //printf("PRIMITIVE:");
-                    //print(exp);
-                    //newline();
                     return (func->primitive)(exp);
                 }
         case PROCEDURE:
@@ -678,8 +675,6 @@ struct object* eval_list(struct object* exp, struct object* env) {
                 struct object* params = func->params;
                 struct object* args = cdr(exp);
                 struct object* new_env = mk_env(func->env);
-                //PRINT(params);
-                //PRINT(args);
                 while (params && args) {
                     struct object* param = car(params);
                     if (param == mk_sym(".")) {  // varidic args
@@ -693,11 +688,6 @@ struct object* eval_list(struct object* exp, struct object* env) {
                 }
                 // apply
                 struct object* body = func->body;
-                //printf("=========== func body =========");
-                //PRINT(body);
-                //printf("===========\n");
-                //printf("func new_env:");
-                //PRINT(new_env);
                 return eval(body, new_env);
             }
             break;
@@ -846,6 +836,7 @@ static void sparrow_init() {
         define_variable(mk_sym("#t"), g_true, the_global_environment);
         define_variable(mk_sym("#f"), g_false, the_global_environment);
         define_variable(mk_sym("()"), NULL, the_global_environment);
+        define_variable(mk_sym("nil"), NULL, the_global_environment);
 
         // primitives
         define_variable(mk_sym("cons"), mk_prim(prim_cons), the_global_environment);
