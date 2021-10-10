@@ -8,34 +8,22 @@ recently, I reread the book [_Structure and Interpretation of Computer Programs_
 
 
 # quick start
-to get read-eval-print-loop:  
-> $ make  
+to get the read-eval-print-loop:  
+    > $make  
+    > $./sparrow
+
+
+to run [sicp's meta-circular evaluator](./res/mceval.scm) on sparrow:
+    > $make mceval  
+    > $./mceval
+
 
 to run the test code:  
->$make test  
+    > $make test  
+    > $./test
 
 and you'll get something like this:  
 ```
-    ************************
-    (assert (sum 1 2 3 4) 10)
-    ==> "pass"
-    ************************
-
-    ************************
-    (assert (odd? 2) #f)
-    ==> "pass"
-    ************************
-
-    ************************
-    (assert (even? 2) #t)
-    ==> "pass"
-    ************************
-
-    ************************
-    (assert (min 1 3 4 0 89) 0)
-    ==> "pass"
-    ************************
-
     ************************
     (assert (max 23 1 90 2 3) 90)
     ==> "pass"
@@ -55,6 +43,26 @@ and you'll get something like this:
     (assert (sort (list 7 6 9 1 0 19 21)) (quote (0 1 6 7 9 19 21)))
     ==> "pass"
     ************************
+
+    ************************
+    (assert (fact 5) 120)
+    ==> "pass"
+    ************************
+
+    ************************
+    (assert (fib 8) 34)
+    ==> "pass"
+    ************************
+
+    ************************
+    (assert (eval (quote (sum 1 2 3))) 6)
+    ==> "pass"
+    ************************
+
+    ************************
+    (assert (apply * 1 2 3 (quote (4 5))) 120)
+    ==> "pass"
+    ************************
 ```
 
 
@@ -63,6 +71,7 @@ and you'll get something like this:
 ;; define
 (define <name> <val>)
 (define (<name> <formal-paramerters>) <body>)
+;; block definition and internal structure is also supported
 
 ;; lambda
 (lambda (<formal-parameters>) <body>) ;; (lambda (x) (* x x))
@@ -98,12 +107,14 @@ and you'll get something like this:
         <exp2>
         ...
         <expn>)
+
+;; etc.
+
 ```
 
 # not supported
 1. macro system  
 2. continuation  
-3. anything else  
 
 p.s. gc is not implemented on purpose, you can do it yourself, mark-and-sweep is easy.  
 

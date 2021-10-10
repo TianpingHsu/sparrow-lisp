@@ -13,6 +13,12 @@
        (fib (- n 2)))))
 
 
+(define x '(1 2))
+(define y '(3 4))
+(define z '(5 5))
+(define w (cons x y))
+(set-car! w '(5 5))
+
 (define increase (curry + 1))
 (assert (increase 10) 11)
 
@@ -37,6 +43,7 @@
 
 (define square (lambda (x) (* x x)))
 (assert (square 8) 64)
+(assert w (cons z y))
 (assert (null? nil) #t)
 (assert (pair? '()) #f)
 (assert (pair? '(1)) #f)

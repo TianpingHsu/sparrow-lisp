@@ -20,7 +20,6 @@
     (func (car list)
           (foldr func acc (cdr list)))))
 
-
 (define (map callback list)
   (if (null? list)
     '()
@@ -49,9 +48,6 @@
 
 (define (compose f g)
   (lambda args (f (apply g args))))
-
-(define (length list)
-  (foldl (lambda (x) (+ x 1)) 0 list))
 
 (define (sum . list) (foldl + 0 list))
 (define (product . list) (foldl * 1 list))
@@ -92,5 +88,10 @@
 
 (define (odd? x) 
   (if (= (mod x 2) 1) #t #f))
+
 (define (even? x) (not (odd? x)))
 
+(define eq? equal?)
+
+(define (cadr l) (car (cdr l)))
+(define (caddr l) (car (cdr (cdr l))))

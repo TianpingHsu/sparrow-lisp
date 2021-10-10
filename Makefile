@@ -1,6 +1,6 @@
 
 CC = gcc
-CFLAGS = -g -Wall
+CFLAGS = -g -Wall -std=gnu11
 SRC = sparrow.c
 
 sparrow: $(SRC)
@@ -11,6 +11,10 @@ test: $(SRC)
 	gcc $(CFLAGS) -D DEBUG  $^ -o $@
 	./test
 
+mceval: $(SRC)
+	gcc $(CFLAGS) -D META_EVAL $^ -o $@
+
+
 clean:
-	rm -rf sparrow test $(OBJS)
+	rm -rf sparrow test mceval $(OBJS)
 
