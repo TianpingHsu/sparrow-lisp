@@ -926,7 +926,7 @@ static void sparrow_init() {
     {
         the_global_environment = mk_env(NULL);
         g_true = mk_bool(true);
-        g_false = mk_bool(false);
+        g_false = mk_bool(false);  // everything not false is true.
         define_variable(mk_sym("#t"), g_true, the_global_environment);
         define_variable(mk_sym("#f"), g_false, the_global_environment);
         define_variable(mk_sym("()"), NULL, the_global_environment);

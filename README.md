@@ -13,14 +13,12 @@ to get the read-eval-print-loop:
     > $./sparrow
 
 
-to run [sicp's meta-circular evaluator](./res/mceval.scm) on sparrow:
+to run [sicp's meta-circular evaluator](./res/mceval.scm) on sparrow:  
     > $make mceval  
-    > $./mceval
 
 
 to run the test code:  
     > $make test  
-    > $./test
 
 and you'll get something like this:  
 ```

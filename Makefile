@@ -9,10 +9,11 @@ sparrow: $(SRC)
 
 test: $(SRC)
 	gcc $(CFLAGS) -D DEBUG  $^ -o $@
-	./test
+	@./test
 
 mceval: $(SRC)
 	gcc $(CFLAGS) -D META_EVAL $^ -o $@
+	@./mceval
 
 
 clean:
