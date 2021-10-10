@@ -1,6 +1,5 @@
 # sparrow-lisp
-*sparrow* is a scheme-like lisp interpreter implemented in C.  
-the name *sparrow* comes from the idiom:  
+*__sparrow__* is a scheme-like lisp interpreter implemented in C. the name comes from the idiom:  
 > the __*sparrow*__ may be small but all its vital organs are there.  
 
 I have been always wanted to write a LISP interpreter, especially when I was a college student.  
@@ -9,16 +8,15 @@ recently, I reread the book [_Structure and Interpretation of Computer Programs_
 
 # quick start
 to get the read-eval-print-loop:  
-    > $make  
-    > $./sparrow
+> $make  
 
 
 to run [sicp's meta-circular evaluator](./res/mceval.scm) on sparrow:  
-    > $make mceval  
+> $make mceval  
 
 
 to run the test code:  
-    > $make test  
+> $make test  
 
 and you'll get something like this:  
 ```
@@ -69,7 +67,7 @@ and you'll get something like this:
 ;; define
 (define <name> <val>)
 (define (<name> <formal-paramerters>) <body>)
-;; block definition and internal structure is also supported
+;; block structure and internal definition is also supported
 
 ;; lambda
 (lambda (<formal-parameters>) <body>) ;; (lambda (x) (* x x))
