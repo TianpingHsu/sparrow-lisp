@@ -1,6 +1,6 @@
 
 CC = gcc
-CFLAGS = -g -Wall -std=gnu11
+CFLAGS = -g -Wall -Wno-error -std=gnu11
 SRC = sparrow.c
 
 sparrow: $(SRC)
@@ -8,11 +8,11 @@ sparrow: $(SRC)
 
 
 test: $(SRC)
-	gcc $(CFLAGS) -D DEBUG  $^ -o $@
+	@gcc $(CFLAGS) -D DEBUG  $^ -o $@
 	@./test
 
 mceval: $(SRC)
-	gcc $(CFLAGS) -D META_EVAL $^ -o $@
+	@gcc $(CFLAGS) -D META_EVAL $^ -o $@
 	@./mceval
 
 

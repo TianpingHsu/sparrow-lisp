@@ -421,8 +421,8 @@ struct object* prim_not(struct object* exp) {
 struct object* prim_display(struct object* exp) {
     // (display x)
     CHECK_ARITY(exp, 1);
-    if (exp->type == SYMBOL || exp->type == STRING) {
-        printf("%s", exp->s);
+    if (cadr(exp)->type == SYMBOL || cadr(exp)->type == STRING) {
+        printf("%s", cadr(exp)->s);
     } else {
         print(cadr(exp));
     }
@@ -819,11 +819,12 @@ struct object* read_exp(FILE* fp) {
             buf[0] = c;
             int i = 1;
             while (isalnum(peek(fp)) || strchr(SYMBOLS, peek(fp))) {
-                if (i >= 128)
-                    printf("Symbol name too long - max length 128 characters");
+                if (i >= 128) printf("Symbol name too long - max length 128 characters");
                 buf[i++] = getc(fp);
             }
             buf[i] = '\0';
+            if (i == 2 && buf[0] == '#' && ((buf[1] == 't') || (buf[1] == 'f')))
+                return buf[1] == 't' ? g_true : g_false;
             return mk_sym(buf);
         }
     }
@@ -979,7 +980,7 @@ int main() {
     sparrow_init();
     load(mk_str("./res/lib.scm"));
 #ifdef META_EVAL
-    printf("run SICP's mceval.scm on sparrow\n");
+    printf("run SICP's mceval.scm on sparrow.\n");
     load(mk_str("./res/mceval.scm"));
     return 0;
 #elif DEBUG
@@ -987,9 +988,9 @@ int main() {
     load(module);
     return 0;
 #endif
-    printf("*SPARROW* LISP interpreter.\n");
+    printf("Welcome to *SPARROW* LISP.\n");
     while (true) {
-        printf(">>> ");
+        printf("> ");
         print(eval(read_exp(stdin), the_global_environment));
         newline();
         if (peek(stdin) == EOF) {

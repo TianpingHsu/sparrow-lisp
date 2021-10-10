@@ -67,3 +67,4 @@
 (assert (fib 8) 34)
 (assert (eval '(sum 1 2 3)) 6)
 (assert (apply * 1 2 3 '(4 5)) 120)
+
