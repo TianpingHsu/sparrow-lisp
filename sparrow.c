@@ -72,9 +72,9 @@ static const char* types_str[] = \
     } \
 } while(0)
 
+struct object* read_exp(FILE* fp);
 struct object* eval(struct object* exp, struct object* env);
 void print(struct object* o);
-struct object* read_exp(FILE* fp);
 
 /*========================================================
  * constructors
@@ -201,11 +201,6 @@ struct object* cadr(struct object* l) {return l->cdr->car;}
 struct object* cdar(struct object* l) {return l->car->cdr;}
 struct object* cddr(struct object* l) {return l->cdr->cdr;}
 struct object* caddr(struct object* l) {return l->cdr->cdr->car;}
-int len(struct object* l) {
-    if (!l) return 0;
-    REQUIRE(l, LIST);
-    return 1 + len(cdr(l));
-}
 
 /*========================================================
  * environment handling
@@ -259,20 +254,15 @@ struct object* define_variable(struct object* var, struct object* val, struct ob
     return val;
 }
 
-struct object* extend_environment(struct object* vars, struct object* vals, struct object* env) {
-    struct object* new_env = mk_env(env);
-    new_env->frame = cons(vars, vals);
-    return new_env;
-}
-
 /*========================================================
  * builtins: primitives and syntax
  * =======================================================*/
-// helper
+// helpers
 struct object* _reverse(struct object* l, struct object* base) {
     if (!l) return base;
     return _reverse(cdr(l), cons(car(l), base));
 }
+
 struct object* reverse(struct object* l) {
     return _reverse(l, NULL);
 }
@@ -280,6 +270,27 @@ struct object* reverse(struct object* l) {
 struct object* append(struct object* x, struct object* y) {
     if (!x) return y;  // both x and y are LIST
     return cons(car(x), append(cdr(x), y));
+}
+
+int len(struct object* l) {
+    if (!l) return 0;
+    REQUIRE(l, LIST);
+    return 1 + len(cdr(l));
+}
+
+bool is_equal(struct object *x, struct object *y) {
+     if (!x || !y) return x == y;
+     if (x->type != y->type) return false;
+     switch (x->type) {
+     case LIST:
+         return is_equal(car(x), car(y)) && is_equal(cdr(x), cdr(x));
+     case NUMBER:
+         return x->integer == y->integer;
+     case STRING:
+         return !strcmp(x->s, y->s);
+     default:
+         return x == y;
+     }
 }
 
 struct object* prim_cons(struct object* l) {
@@ -300,21 +311,6 @@ struct object* prim_cdr(struct object* l) {
     return cdr(cadr(l));
 }
 
-bool is_equal(struct object *x, struct object *y) {
-     if (!x || !y) return x == y;
-     if (x->type != y->type) return false;
-     switch (x->type) {
-     case LIST:
-         return is_equal(car(x), car(y)) && is_equal(cdr(x), cdr(x));
-     case NUMBER:
-         return x->integer == y->integer;
-     case STRING:
-         return !strcmp(x->s, y->s);
-     default:
-         return x == y;
-     }
-}
-
 struct object* prim_eq(struct object* exp) {
     // (equal x y)
     CHECK_ARITY(exp, 2);
@@ -323,6 +319,7 @@ struct object* prim_eq(struct object* exp) {
     struct object* y = cadr(exp);
     return is_equal(x, y) ? g_true : g_false;
 }
+
 struct object* prim_is_pair(struct object* exp) {
     // (pair? exp)
     CHECK_ARITY(exp, 1);
@@ -336,6 +333,7 @@ struct object* prim_is_symbol(struct object* exp) {
     struct object* o = cadr(exp);
     return o && o->type == SYMBOL ? g_true : g_false;
 }
+
 struct object* prim_is_string(struct object* exp) {
     // (string? exp)
     CHECK_ARITY(exp, 1);
@@ -998,3 +996,4 @@ int main() {
         }
     }
 }
+
