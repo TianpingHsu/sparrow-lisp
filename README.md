@@ -112,7 +112,7 @@ and you'll get something like this:
 1. macro system  
 2. continuation  
 
-p.s. gc is not implemented on purpose, you can do it yourself, mark-and-sweep is easy.  
+p.s. gc is not implemented on purpose, you can do it yourself, mark-and-sweep is easy.check [here](https://hboehm.info/gc/).  
 
 
 # useful materials
